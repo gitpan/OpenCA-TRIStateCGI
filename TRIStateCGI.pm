@@ -69,7 +69,7 @@ use CGI;
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 
 # Preloaded methods go here.
@@ -164,6 +164,7 @@ sub newInputCheck {
 	$m = "[0-9\-\/]+" if ( "$regx" eq "DATE" );
 	$m = "[0-9\-\+]+" if ( "$regx" eq "TEL" );
 	$m = "[0-9a-zA-Z\_\.]+@[a-zA-Z0-9\.\-]+" if ( "$regx" eq "EMAIL" );
+	$m = "[a-zA-Z\ À-ÿ]+" if ( "$regx" eq "LATIN1_LETTERS" );
 
 	$p =~ s/$m//g;
 

@@ -1,5 +1,8 @@
 Revision history for Perl extension OpenCA::TRIStateCGI.
 
+1.1  Sat Ago 28 12:32:12 1999
+     Addedd support for LATIN1 Letters int REGX Type
+
 1.0  Wed Apr 28 13:21:35 1999
      First Release Version.
 
