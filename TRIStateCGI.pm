@@ -69,7 +69,7 @@ use CGI;
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
-$VERSION = '1.02';
+$VERSION = '1.2.35';
 
 
 # Preloaded methods go here.
@@ -77,9 +77,7 @@ $VERSION = '1.02';
 ## General Functions
 sub status {
 	my $self = shift;
-	my @keys;
-	@par = $self->param;
-	$i = @par;
+	my @keys = @_;
 
      	$ret = $self->param('status');
      	if ( $ret =~ /(client\-filled\-form|client\-confirmed\-form)/ ) {
@@ -157,29 +155,33 @@ sub newInputCheck {
  
 	$m = $regx; 
      
-	$m = "[a-zA-Z\ ]+" if ( "$regx" eq "LETTERS" );
-	$m = "[a-zA-Z\ \,\.\_\:\'\`\\\/\(\)\!\;]+" if ( "$regx" eq "TEXT" );
+	$m = "[a-zA-Z\ ¡-ÿ]+" if ( "$regx" eq "LETTERS" );
+	## $m = "[a-zA-Z\ \,\.\_\:\'\`\\\/\(\)\!\;]+" if ( "$regx" eq "TEXT" );
+	$m = "[ -\@a-zA-Z]+" if ( "$regx" eq "TEXT" );
 	$m = "[0-9]+" if ( "$regx" eq "NUMERIC" );
-	$m = "[a-zA-Z0-9\ \,\.\_\:\'\`\\\/\(\)\!\;]+" if ( "$regx" eq "MIXED" );
+	$m = "[ -\@a-zA-Z]+" if ( "$regx" eq "MIXED" );
 	$m = "[0-9\-\/]+" if ( "$regx" eq "DATE" );
-	$m = "[0-9\-\+]+" if ( "$regx" eq "TEL" );
-	$m = "[0-9a-zA-Z\_\.]+@[a-zA-Z0-9\.\-]+" if ( "$regx" eq "EMAIL" );
-	$m = "[a-zA-Z\ À-ÿ]+" if ( "$regx" eq "LATIN1_LETTERS" );
+	$m = "[0-9\-\+\\\(\)]+" if ( "$regx" eq "TEL" );
+	$m = "[0-9a-zA-Z\-\_\.]+\@[a-zA-Z0-9\_\.\-]+" if ( "$regx" eq "EMAIL" );
+	$m = "[a-zA-Z¡-ÿ -\@]+" if ( "$regx" eq "LATIN1_LETTERS" );
+	$m = "[ -\@a-zA-Z¡-ÿ]+" if ( "$regx" eq "LATIN1" );
 
 	$p =~ s/$m//g;
 
 	if ( length($p) == 0 ) {
 		$ret = "<BR>(OK)<BR>";
 	} else {
-		$ret = "Error. ";
 		$ret .= "Use only chars" if ( $regx eq "TEXT" );
+		$ret .= "Use only LATIN1 chars" if ($regx eq "LATIN1_LETTERS");
+		$ret .= "Use only LATIN1 chars/numbers" if ( $regx eq "LATIN1");
 		$ret .= "Use only numbers" if ( $regx eq "NUMERIC" );
-		$ret .= "Usa only chars./numbers" if ( $regx eq "MIXED" );
+		$ret .= "Use only chars./numbers" if ( $regx eq "MIXED" );
 		$ret .= "Use xx\/xx\/xxxx format." if ( $regx eq "DATE" );
 		$ret .= "Use ++xx-xxx-xxxxxx format." if ( $regx eq "TEL" );
 		$ret .= 'Use aabbcc@dddd.eee.ff' if ( $regx eq "EMAIL" );
+		$ret = "Undefined Error" if ($ret eq "");
 
-		$ret = "<BR><FONT COLOR=RED>$ret</FONT><BR>"; 
+		$ret = "<BR><FONT COLOR=RED>Error. $ret</FONT><BR>"; 
 	}
 	return $ret;
 }
@@ -213,7 +215,6 @@ sub printError {
 	$errTxt  = $keys[1];
 
 	$html = $self->start_html(-title=>'Error Accessing the Service',
-		-author=>'CGI manager <madwolf@comune.modena.it>',
 		-BGCOLOR=>'#FFFFFF');
 
 	$html .= '<FONT FACE=Helvetica SIZE=+4 COLOR="#E54211">';
@@ -234,11 +235,10 @@ sub printError {
 
 	} else {
 		## General Error Message 
-		$html .= "General Error Protection Fault : The Error Could not be determined by the server,\n";
-		$html .= "if the error persists, please contact the system administrator for further explanation.<BR><BR>\n";
-		$html .= "Errore di Protezione Generale : Non e\' stato possibile determinare l\'errore verificatosi,\n";
-		$html .= "se questa condizione dovesse persistere siete pregati di contattare l\'amministratore di sistema\n";
-		$html .= "per maggiori informazioni<BR><BR>\n";
+		$html .= "General Error Protection Fault : The Error Could" .
+			 " not be determined by the server,<BR>";
+		$html .= "if the error persists, please contact the system" .
+			 " administrator for further explanation.<BR><BR>\n";
 	};
 
 	$html .= "</FONT><BR>\n\n";
@@ -247,8 +247,6 @@ sub printError {
 	return $html;
 }
 
-## New TRIState Specific Functions
-## ===============================
 sub getFile {
 	my $self = shift;
 	my $ret;
@@ -261,7 +259,6 @@ sub getFile {
 	};
 	return $ret;
 }
-
 
 sub subVar {
 	my $self = shift;
@@ -278,6 +275,105 @@ sub subVar {
 
 	return $text;
 }
+
+sub startTable {
+	my $self = shift;
+	my $keys = { @_ };
+	my $ret;
+
+	my $width      = $keys->{WIDTH};
+
+	my $titleColor = $keys->{TITLE_COLOR};
+	my $cellColor  = $keys->{CELL_COLOR};
+
+	my $titleBg    = $keys->{TITLE_BGCOLOR};
+	my $tableBg    = $keys->{TABLE_BGCOLOR};
+	my $cellBg     = $keys->{CELL_BGCOLOR};
+	my $spacing    = "1";
+
+	my @cols = @{ $keys->{COLS} };
+
+	$width      = "100%" if (not $width);
+	$cellColor  = "#000000" if ( not $cellColor );
+
+	$titleBg   = "#DDDDEE" if ( not $titleBg );
+	$cellBg    = "#FFFFFF" if ( not $cellBg );
+
+	if( $tableBg ) {
+		my $spacing = "1";
+	};
+
+	my $titleFont = "FONT FACE=Helvetica,Arial";
+	$titleFont .= " color=\"$titleColor\"" if( $titleColor );
+	
+	$ret =  "<TABLE BORDER=0 WIDTH=\"$width\" CELLPADDING=1 CELLSPACING=0 ";
+	$ret .= "BGCOLOR=\"#000000\"" if ( $tableBg );
+	$ret .= "><TR><TD>\n";
+
+	$ret .= "<TABLE BORDER=0 WIDTH=\"100%\" CELLPADDING=2 BGCOLOR=$cellBg";
+	$ret .= " CELLSPACING=\"$spacing\" FGCOLOR=\"$cellColor\">\n";
+	$ret .= "<TR BGCOLOR=\"$titleBg\">\n";
+
+	foreach $name (@cols) {
+		$ret .= "<TD><$titleFont><B>$name</B></FONT></TD>\n";
+	}
+
+	$ret .= "</TR>\n";
+
+	return $ret;
+}
+
+sub addTableLine {
+	my $self = shift;
+	my $keys = { @_ };
+	my $ret;
+
+	my @data    = @{ $keys->{DATA} };
+	my $bgColor = $keys->{BGCOLOR};
+	my $color   = $keys->{COLOR};
+	my $colorEnd;
+	
+	if( $bgColor ) {
+		$ret = "<TR BGCOLOR=$bgColor>\n";
+	} else {
+		$ret = "<TR>\n";
+	}
+
+	if( $color ) {
+		$color = "<FONT COLOR=\"$color\">";
+		$colorEnd = "</FONT>";
+	}
+
+	foreach $val ( @data ) {
+		$ret .= "<TD>$color $val $colorEnd</TD>\n";
+	}
+	$ret .= "</TR>\n";
+
+	return $ret;
+}
+
+sub endTable {
+	my $self = shift;
+	my $ret;
+
+	$ret = "</TABLE></TD></TR></TABLE><P>\n";
+
+	return $ret;
+}
+
+sub printCopyMsg {
+	my $self = shift;
+	my @keys = @_;
+	my $ret;
+
+	my $msg = $keys[0];
+
+	$msg = "&copy 1998 by OpenCA Group" if ( not $msg );
+	$ret = "<CENTER><BR>$msg<BR><CENTER>";
+
+	return $ret;
+}
+
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
 1;
@@ -294,7 +390,26 @@ OpenCA::TRIStateCGI - Perl extension for implementing 3-state Input Objs.
 
 =head1 DESCRIPTION
 
-Sorry, no description available
+Sorry, no description available. Currently implemented methods derives
+mostly from the CGI.pm module, please take a look at that docs. Added
+methods are:
+
+	status        -
+	newInput      -
+	newInputCheck -
+	checkForm     -
+	startTable    -
+	addTableLine  -
+	endTable      -
+	printCopyMsg  -
+	printError    -
+
+Deprecated methods (better use the OpenCA::Tools corresponding methods
+instead) are:
+
+	subVar        -
+	getFile       -
+	
 
 =head1 AUTHOR
 
@@ -302,7 +417,8 @@ Massimiliano Pala (madwolf@openca.org)
 
 =head1 SEE ALSO
 
-perl(1).
+CGI.pm, OpenCA::Configuration, OpenCA::OpenSSL, OpenCA::X509, OpenCA::CRL,
+OpenCA::REQ, OpenCA::CRR, OpenCA::Tools
 
 =cut
 
