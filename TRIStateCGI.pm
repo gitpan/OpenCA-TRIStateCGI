@@ -59,7 +59,7 @@
 ## ===============
 ##
 ##      Started		: 8 December 1998
-##      Last Modified	: 29 April 1999
+##      Last Modified	: 12 Genuary 2001
 
 use strict;
 
@@ -72,7 +72,7 @@ use CGI;
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 
-$OpenCA::TRIStateCGI::VERSION = '1.3.0a';
+$OpenCA::TRIStateCGI::VERSION = '1.5.4';
 
 
 # Preloaded methods go here.
@@ -98,13 +98,23 @@ sub newInput {
 	my @keys = @_;
 
 	my ( $ret, $error, $m );
+	my ( $type, $maxlen, $minlen, $regx, $name, $values);
 
-	## Get all the Checking and Input Data
-	my($type,$maxlen,$minlen,$regx) = 
-		$self->rearrange(["INTYPE","MAXLEN","MINLEN","REGX"],@keys);
-     
-	## Get the actual Value
-	## my($value) = $self->rearrange([VALUE],@keys);
+        ## Rearrange CGI's function changed in perl 5.6.1 - CGI ver 2.75+
+        if ( $CGI::VERSION >= 2.60 ) {
+                if ( ref(@_[0]) ne "HASH" ) {
+                        @keys = { @keys };
+                }
+
+                ( $name, $values ) = $self->rearrange(["NAME"], @keys );
+
+                $type = $values->{'-intype'};
+        } else {
+         
+                ( $type, $maxlen, $minlen, $regx) =
+                        $self->rearrange(["INTYPE","MAXLEN","MINLEN","REGX"],
+                                         @keys);
+        }
 
 	## Check if there is an Error
 	$error = $self->newInputCheck(@_) if ( $self->status ne "start" ); 
@@ -128,11 +138,24 @@ sub newInputCheck {
 	my @keys = @_;
 
 	my ( $ret, $m, $p, $l );
+	my ( $name, $values, $type, $maxlen, $minlen, $regx, $name );
 
-	my($type,$maxlen,$minlen,$regx,$name) = 
-		$self->rearrange(["INTYPE","MAXLEN","MINLEN","REGX","NAME"],
-									@keys);
+	## Rearrange CGI's function changed in perl 5.6.1 - CGI ver 2.75+
+	if ( $CGI::VERSION >= 2.60 ) {
+		( $name, $values ) = $self->rearrange(["NAME"], @keys );
 
+        	$type 	= $values->{'-intype'};
+        	$maxlen = $values->{'-maxlen'};
+        	$minlen = $values->{'-minlen'};
+        	$regx 	= $values->{'-regx'};
+        	$name 	= $values->{'-name'};
+
+	} else {
+		( $type, $maxlen, $minlen, $regx, $name) = 
+			$self->rearrange(["INTYPE","MAXLEN","MINLEN","REGX",
+					   "NAME"], @keys);
+	}
+     
 	$p = $self->param("$name");
 
 	if( $maxlen != "" ) {
@@ -290,7 +313,9 @@ sub startTable {
 	my $titleBg    = $keys->{TITLE_BGCOLOR};
 	my $tableBg    = $keys->{TABLE_BGCOLOR};
 	my $cellBg     = $keys->{CELL_BGCOLOR};
-	my $spacing    = "1";
+	my $spacing    = ( $keys->{SPACING} or "1");
+	my $padding    = ( $keys->{PADDING} or "1");
+	my $cellPad    = ( $keys->{CELLPADDING} or "1");
 
 	my @cols = @{ $keys->{COLS} };
 
@@ -302,18 +327,14 @@ sub startTable {
 	$titleBg   = "#DDDDEE" if ( not $titleBg );
 	$cellBg    = "#FFFFFF" if ( not $cellBg );
 
-	if( $tableBg ) {
-		my $spacing = "1";
-	};
-
 	my $titleFont = "FONT FACE=Helvetica,Arial";
 	$titleFont .= " color=\"$titleColor\"" if( $titleColor );
 	
-	$ret =  "<TABLE BORDER=0 WIDTH=\"$width\" CELLPADDING=1 CELLSPACING=0 ";
-	$ret .= "BGCOLOR=\"#000000\"" if ( $tableBg );
+	$ret =  "<TABLE BORDER=0 WIDTH=\"$width\" CELLPADDING=$padding CELLSPACING=0 ";
+	$ret .= "BGCOLOR=\"$tableBg\"" if ( $tableBg );
 	$ret .= "><TR><TD>\n";
 
-	$ret .= "<TABLE BORDER=0 WIDTH=\"100%\" CELLPADDING=2 BGCOLOR=$cellBg";
+	$ret .= "<TABLE BORDER=0 WIDTH=\"100%\" CELLPADDING=$cellPad BGCOLOR=$cellBg";
 	$ret .= " CELLSPACING=\"$spacing\" FGCOLOR=\"$cellColor\">\n";
 	$ret .= "<TR BGCOLOR=\"$titleBg\">\n";
 
@@ -376,6 +397,68 @@ sub printCopyMsg {
 
 	return $ret;
 }
+
+sub buildRefs {
+	my $self = shift;
+        my $keys = { @_ };
+
+        my ( $ret, $i, $link, $pages, $current, $from, $title );
+
+        my $elements    = $keys->{ELEMENTS};
+        my $maxItems    = $keys->{MAXITEMS};
+
+        $maxItems = 30 if ( not $maxItems );
+        $from = ( $self->param('viewFrom') or 0 );
+
+        ## if( not $self->param('pp') ) {
+                $pages = int $elements / $maxItems;
+                $pages++ if( $elements % $maxItems );
+        ## } else {
+        ##        $pages = $self->param('pp');
+        ## };
+
+        ## if ( not $self->param('cpp') ) {
+                $current = int $from / $maxItems;
+                $current++ if ( $from % $maxItems );
+        ## } else {
+        ##        $current  = $self->param('cpp');
+        ## };
+
+        $title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">Extra References ";
+
+	for( $i = 0; $i < $pages ; $i++ ) {
+                my $from = $i * $maxItems;
+		my $pnum;
+		
+		$pnum = $i + 1;
+
+		if ( $i != $current ) {
+                ##         $self->param( -name=>"pp",       -value=>"$pages" );
+			$self->param( -name=>"viewFrom", -value=>"$from" );
+                ##         $self->param( -name=>"cpp",      -value=>"$i" );
+
+                        $link = $self->self_url();
+                        $title .= "&nbsp; <a href=\"$link\">$pnum</a> ";
+                } else {
+                        $title .= "&nbsp; $pnum ";
+                }
+	}
+        if ( $pages <= 1 ) {
+                $title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">" . 
+                                "No Extra References";
+        }
+
+        $title .= "</FONT></DIV>";
+        $ret = $self->startTable( COLS=>[ "$title" ],
+                               TITLE_BGCOLOR=>"#EEEEF1",
+                               TABLE_BGCOLOR=>"#000000" );
+
+        $ret .= $self->endTable();
+
+        return $ret;
+}
+
+
 
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
