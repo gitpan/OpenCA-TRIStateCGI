@@ -61,15 +61,18 @@
 ##      Started		: 8 December 1998
 ##      Last Modified	: 29 April 1999
 
+use strict;
+
 package OpenCA::TRIStateCGI;
 
 use CGI;
 
-@ISA = ( "CGI" );
+@OpenCA::TRIStateCGI::ISA = ( @OpenCA::TRIStateCGI::ISA, "CGI" );
 # Items to export into callers namespace by default. Note: do not export
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
-$VERSION = '1.2.35';
+
+$OpenCA::TRIStateCGI::VERSION = '1.3.0a';
 
 
 # Preloaded methods go here.
@@ -79,7 +82,7 @@ sub status {
 	my $self = shift;
 	my @keys = @_;
 
-     	$ret = $self->param('status');
+     	my $ret = $self->param('status');
      	if ( $ret =~ /(client\-filled\-form|client\-confirmed\-form)/ ) {
 		return $ret;
 	} else {
@@ -92,13 +95,13 @@ sub status {
 sub newInput {
 
 	my $self = shift;
-	my @keys;
-	my $ret;
-	@keys = @_;
+	my @keys = @_;
+
+	my ( $ret, $error, $m );
 
 	## Get all the Checking and Input Data
 	my($type,$maxlen,$minlen,$regx) = 
-		$self->rearrange([INTYPE,MAXLEN,MINLEN,REGX],@keys);
+		$self->rearrange(["INTYPE","MAXLEN","MINLEN","REGX"],@keys);
      
 	## Get the actual Value
 	## my($value) = $self->rearrange([VALUE],@keys);
@@ -122,12 +125,13 @@ sub newInput {
 sub newInputCheck {
 
 	my $self = shift;
-	my @keys;
-	my $ret;
-	@keys = @_;
+	my @keys = @_;
+
+	my ( $ret, $m, $p, $l );
 
 	my($type,$maxlen,$minlen,$regx,$name) = 
-		$self->rearrange([INTYPE,MAXLEN,MINLEN,REGX,NAME],@keys);
+		$self->rearrange(["INTYPE","MAXLEN","MINLEN","REGX","NAME"],
+									@keys);
 
 	$p = $self->param("$name");
 
@@ -188,31 +192,29 @@ sub newInputCheck {
 
 sub checkForm {
 
-	my $ret ="";
+	my $self = shift;
+	my @keys = @_;
+
+	my ( $ret, $in, $m );
 	
-	$ret .= $signed->newInputCheck( %par1 );
-	$ret .= $signed->newInputCheck( %par2 );
-	$ret .= $signed->newInputCheck( %par3 );
-	$ret .= $signed->newInputCheck( %par4 );
-	$ret .= $signed->newInputCheck( %par5 );
-	$ret .= $signed->newInputCheck( %par6 );
-	$ret .= $signed->newInputCheck( %par7 );
+	for $in ( @keys ) {
+		$ret .= $self->newInputCheck( %$in );
+	}
 
 	$m = "<BR>|OK|[\ \(\)]";
 	$ret =~ s/$m//g;
 
-	## print "<!----$ret----!>";
 	return $ret;
 };
 
 sub printError {
 	my $self = shift;
-	my $ret;
-	my @keys;
-	@keys = @_;
+	my @keys = @_;
 
-	$errCode = $keys[0];
-	$errTxt  = $keys[1];
+	my ( $html, $ret );
+
+	my $errCode = $keys[0];
+	my $errTxt  = $keys[1];
 
 	$html = $self->start_html(-title=>'Error Accessing the Service',
 		-BGCOLOR=>'#FFFFFF');
@@ -249,9 +251,9 @@ sub printError {
 
 sub getFile {
 	my $self = shift;
-	my $ret;
-	my @keys;
-	@keys = @_;
+	my @keys = @_;
+
+	my ( $ret, $temp );
 
 	open( FD, $keys[0] ) || return;
 	while ( $temp = <FD> ) {
@@ -262,9 +264,9 @@ sub getFile {
 
 sub subVar {
 	my $self = shift;
-	my $ret;
-	my @keys;
-	@keys = @_;
+	my @keys = @_;
+
+	my ( $text, $parname, $var, $ret, $match );
 
 	$text    = $keys[0];
 	$parname = $keys[1];
@@ -279,7 +281,6 @@ sub subVar {
 sub startTable {
 	my $self = shift;
 	my $keys = { @_ };
-	my $ret;
 
 	my $width      = $keys->{WIDTH};
 
@@ -292,6 +293,8 @@ sub startTable {
 	my $spacing    = "1";
 
 	my @cols = @{ $keys->{COLS} };
+
+	my ( $ret, $name );
 
 	$width      = "100%" if (not $width);
 	$cellColor  = "#000000" if ( not $cellColor );
@@ -326,12 +329,12 @@ sub startTable {
 sub addTableLine {
 	my $self = shift;
 	my $keys = { @_ };
-	my $ret;
 
 	my @data    = @{ $keys->{DATA} };
 	my $bgColor = $keys->{BGCOLOR};
 	my $color   = $keys->{COLOR};
-	my $colorEnd;
+
+	my ( $val, $colorEnd, $ret );
 	
 	if( $bgColor ) {
 		$ret = "<TR BGCOLOR=$bgColor>\n";
