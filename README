@@ -1,5 +1,5 @@
 =======================================================================
-               TRIState CGI Manager - Verison 1.0.0
+               TRIState CGI Manager - Version 1.0.0
                 (c) 1998/1999 by Massimiliano Pala
 =======================================================================
 
@@ -16,8 +16,8 @@ INTRODUCTION
 ============
 
    This software is a Perl5 module that helps in managing config
-   files: it gives you functions capable of retieving files, stripping
-   comments and blank lines, parsing function, ecc...
+   files: it gives you functions capable of retrieving files, stripping
+   comments and blank lines, parsing function, etc...
    
 
 REQUIREMENTS
@@ -46,7 +46,7 @@ FEEDBACK
 ========
 
    This is a very early pre-release, anyway it works fine and it's
-   quite usefull yet, so here it comes. Many things should be added
+   quite useful yet, so here it comes. Many things should be added
    in the near future, so stay tuned for future releases.
 
 TO DO

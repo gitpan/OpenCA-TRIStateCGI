@@ -72,8 +72,14 @@ use CGI;
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 
-$OpenCA::TRIStateCGI::VERSION = '1.5.4';
+$OpenCA::TRIStateCGI::VERSION = '1.5.5';
 
+use FileHandle;
+our ($STDERR, $STDOUT);
+$STDOUT = \*STDOUT;
+$STDERR = \*STDERR;
+
+our ($errno, $errval);
 
 # Preloaded methods go here.
 
@@ -142,6 +148,10 @@ sub newInputCheck {
 
 	## Rearrange CGI's function changed in perl 5.6.1 - CGI ver 2.75+
 	if ( $CGI::VERSION >= 2.60 ) {
+		if ( ref(@_[0]) ne "HASH" ) {
+			@keys = { @keys };
+		}
+
 		( $name, $values ) = $self->rearrange(["NAME"], @keys );
 
         	$type 	= $values->{'-intype'};
@@ -272,18 +282,21 @@ sub printError {
 	return $html;
 }
 
-sub getFile {
-	my $self = shift;
-	my @keys = @_;
-
-	my ( $ret, $temp );
-
-	open( FD, $keys[0] ) || return;
-	while ( $temp = <FD> ) {
-		$ret .= $temp;
-	};
-	return $ret;
-}
+## this functionality is part of OpenCA::Tools
+## OpenCA::Tools configure files to so getFile in OpenCA::TRIStateCGI is a bug
+##
+## sub getFile {
+## 	my $self = shift;
+## 	my @keys = @_;
+## 
+## 	my ( $ret, $temp );
+## 
+## 	open( FD, $keys[0] ) || return;
+## 	while ( $temp = <FD> ) {
+## 		$ret .= $temp;
+## 	};
+## 	return $ret;
+## }
 
 sub subVar {
 	my $self = shift;
@@ -400,111 +413,241 @@ sub printCopyMsg {
 
 sub buildRefs {
 	my $self = shift;
-        my $keys = { @_ };
+	my $keys = { @_ };
 
-        my ( $ret, $i, $link, $pages, $current, $from, $title );
+	my ( $ret, $i, $link, $pages, $current, $from, $to, $title );
 
-        my $elements    = $keys->{ELEMENTS};
-        my $maxItems    = $keys->{MAXITEMS};
+	my $elements    = $keys->{ELEMENTS};
+	my $maxItems    = $keys->{MAXITEMS};
+	my $factor	= $keys->{FACTOR};
+	my $mode	= $keys->{MODE};
 
-        $maxItems = 30 if ( not $maxItems );
-        $from = ( $self->param('viewFrom') or 0 );
+	$maxItems = 30 if ( not $maxItems );
 
-        ## if( not $self->param('pp') ) {
-                $pages = int $elements / $maxItems;
-                $pages++ if( $elements % $maxItems );
-        ## } else {
-        ##        $pages = $self->param('pp');
-        ## };
-
-        ## if ( not $self->param('cpp') ) {
-                $current = int $from / $maxItems;
-                $current++ if ( $from % $maxItems );
-        ## } else {
-        ##        $current  = $self->param('cpp');
-        ## };
-
-        $title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">Extra References ";
-
-	for( $i = 0; $i < $pages ; $i++ ) {
-                my $from = $i * $maxItems;
-		my $pnum;
-		
-		$pnum = $i + 1;
-
-		if ( $i != $current ) {
-                ##         $self->param( -name=>"pp",       -value=>"$pages" );
-			$self->param( -name=>"viewFrom", -value=>"$from" );
-                ##         $self->param( -name=>"cpp",      -value=>"$i" );
-
-                        $link = $self->self_url();
-                        $title .= "&nbsp; <a href=\"$link\">$pnum</a> ";
-                } else {
-                        $title .= "&nbsp; $pnum ";
-                }
+	if ($keys->{NOW_FIRST}) {
+		$from = $keys->{NOW_FIRST};
+	} else {
+		$from = ( $self->param('viewFrom') or 0 );
 	}
-        if ( $pages <= 1 ) {
-                $title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">" . 
-                                "No Extra References";
-        }
+	if ($keys->{NOW_LAST}) {
+		$to = $keys->{NOW_LAST};
+	} else {
+		$to = ( $self->param('viewTo') or undef );
+	}
+
+	my $first = $keys->{FIRST};
+	my $last  = $keys->{LAST};
+
+	if ( $elements == 0 ) {
+		$title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">" . 
+			"No Extra References";
+	} elsif ($mode =~ /EXP/i) {
+
+		my $total_links = 0;
+		$title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">Extra References ";
+
+		## fix wrong parameters
+		if ($factor > $maxItems) {
+			my $h     = $factor;
+			$factor   = $maxItems;
+			$maxItems = $h;
+		}
+		$factor=2 if ($factor < 2);
+
+		## backward references
+
+		if ($from != $first) {
+
+			$total_links++;
+
+			## first element
+			my @list = ();
+
+			## calculate links
+			while (1) {
+				my $hfrom;
+				if ($from > ($maxItems * exp (log($factor)*@list))) {
+					$hfrom = $maxItems * sprintf( "%.0f", exp (log($factor)*@list));
+				} else {
+					$hfrom = $from - $first;
+				}
+
+				if ( ($hfrom != ($from - $first)) and
+				     ($elements < ($from - $first))
+				   ) {
+					$hfrom = $hfrom * $from / $elements;
+					$hfrom = sprintf( "%.0f", $hfrom);
+				}
+
+				$hfrom = $from - $hfrom;
+
+				$hfrom = $first
+					if ($hfrom < $first);
+
+				$list [@list] = $hfrom;
+
+				last if ($hfrom <= $first);
+			}
+
+			## build links
+			for (my $i=$#list; $i >= 0; $i--) {
+				$self->param( -name=>"viewFrom", -value=>$list[$i]);
+        	               	$link = $self->self_url();
+	        	        $title .= "&nbsp; <a href=\"$link\">";
+				$title .= "|"
+					if ($i == $#list);
+				for (my $k=0; $k <= $i; $k++) {
+					$title .= "&lt;";
+				}
+				$title .= "</a> ";
+			}
+		}
+
+		## forward references
+
+		if ($to != $last) {
+
+			$total_links++;
+
+			## first element
+			my @list = ();
+
+			## calculate links
+			while (1) {
+				my $hfrom;
+				if ($last > ($to - $maxItems + 1 + $maxItems * exp (log($factor)*@list))) {
+					$hfrom = -$maxItems + 1 +$maxItems * sprintf( "%.0f", exp (log($factor)*@list));
+				} else {
+					$hfrom = $last - $to;
+				}
+
+				if ( ($hfrom != ($last - $to)) and
+				     ($hfrom != 1) and
+				     ($elements < ($last - $to))
+				   ) {
+					$hfrom = $hfrom * $last / $elements;
+					$hfrom = sprintf( "%.0f", $hfrom);
+				}
+
+				$hfrom = $to + $hfrom;
+
+				$hfrom = $last - $maxItems + 1
+					if ($hfrom > $last - $maxItems);
+
+				$list [@list] = $hfrom;
+
+				last if ($hfrom > ($last - $maxItems));
+			}
+
+			## build links
+			for (my $i=0; $i <= $#list; $i++) {
+				$self->param( -name=>"viewFrom", -value=>$list[$i]);
+        	               	$link = $self->self_url();
+	        	        $title .= "&nbsp; <a href=\"$link\">";
+				for (my $k=0; $k <= $i; $k++) {
+					$title .= "&gt;";
+				}
+				$title .= "|"
+					if ($i == $#list);
+				$title .= "</a> ";
+			}
+
+		}
+
+	        if ( $total_links < 1 ) {
+        	        $title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">" . 
+                	                "No Extra References";
+        	}
+
+	} else {
+
+	        $pages = int $elements / $maxItems;
+        	$pages++ if( $elements % $maxItems );
+
+	        $current = int $from / $maxItems;
+        	## $current++ if ( $from % $maxItems );
+
+	        $title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">Extra References ";
+
+		for( $i = 0; $i < $pages ; $i++ ) {
+	                my ( $from, $pnum );
+		
+			$pnum = $i + 1;
+			$from = sprintf( "%lx", $i * $maxItems + 1);
+
+			if ( $i != $current ) {
+				$self->param( -name=>"viewFrom", -value=>"$from" );
+	                        $link = $self->self_url();
+                        	$title .= "&nbsp; <a href=\"$link\">$pnum</a> ";
+                	} else {
+        	                $title .= "&nbsp; $pnum ";
+	                }
+		}
+	        if ( $pages <= 1 ) {
+                	$title = "<DIV ALIGN=\"RIGHT\"><FONT SIZE=\"-1\">" . 
+        	                        "No Extra References";
+	        }
+
+	}
 
         $title .= "</FONT></DIV>";
-        $ret = $self->startTable( COLS=>[ "$title" ],
-                               TITLE_BGCOLOR=>"#EEEEF1",
-                               TABLE_BGCOLOR=>"#000000" );
+       	$ret = $self->startTable( COLS=>[ "$title" ],
+               	               TITLE_BGCOLOR=>"#EEEEF1",
+                       	       TABLE_BGCOLOR=>"#000000" );
 
         $ret .= $self->endTable();
+
 
         return $ret;
 }
 
+sub setError {
+    my $self = shift;
 
+    if (scalar (@_) == 4) {
+        my $keys = { @_ };
+        $errval = $keys->{ERRVAL};
+        $errno  = $keys->{ERRNO};
+    } else {
+        $errno  = $_[0];
+        $errval = $_[1];
+    }
 
+    print $STDERR "PKI Master Alert: Access control is misconfigured\n";
+    print $STDERR "PKI Master Alert: Aborting all operations\n";
+    print $STDERR "PKI Master Alert: Error:   $errno\n";
+    print $STDERR "PKI Master Alert: Message: $errval\n";
+    print $STDERR "PKI Master Alert: debugging messages of access control follow\n";
+    $self->{debug_fd} = $STDERR;
+    $self->debug ();
+    $self->{debug_fd} = $STDOUT;
+
+    ## support for: return $self->setError (1234, "Something fails.") if (not $xyz);
+    return undef;
+}
+
+sub debug {
+
+    my $self = shift;
+    if ($_[0]) {
+        $self->{debug_msg}[scalar @{$self->{debug_msg}}] = $_[0];
+        $self->debug () if ($self->{DEBUG});
+    } else {
+        my $msg;
+        foreach $msg (@{$self->{debug_msg}}) {
+            $msg =~ s/ /&nbsp;/g;
+            my $oldfh = select $self->{debug_fd};
+            print $STDOUT $msg."<br>\n";
+            select $oldfh;
+        }
+        $self->{debug_msg} = ();
+    }
+
+}
+
+#############################################################################
+##                         check the channel                               ##
+#############################################################################
 # Autoload methods go after =cut, and are processed by the autosplit program.
 
 1;
-__END__
-# Below is the stub of documentation for your module. You better edit it!
-
-=head1 NAME
-
-OpenCA::TRIStateCGI - Perl extension for implementing 3-state Input Objs.
-
-=head1 SYNOPSIS
-
-  use OpenCA::TRIStateCGI;
-
-=head1 DESCRIPTION
-
-Sorry, no description available. Currently implemented methods derives
-mostly from the CGI.pm module, please take a look at that docs. Added
-methods are:
-
-	status        -
-	newInput      -
-	newInputCheck -
-	checkForm     -
-	startTable    -
-	addTableLine  -
-	endTable      -
-	printCopyMsg  -
-	printError    -
-
-Deprecated methods (better use the OpenCA::Tools corresponding methods
-instead) are:
-
-	subVar        -
-	getFile       -
-	
-
-=head1 AUTHOR
-
-Massimiliano Pala (madwolf@openca.org)
-
-=head1 SEE ALSO
-
-CGI.pm, OpenCA::Configuration, OpenCA::OpenSSL, OpenCA::X509, OpenCA::CRL,
-OpenCA::REQ, OpenCA::CRR, OpenCA::Tools
-
-=cut
-
